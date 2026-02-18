@@ -1,23 +1,10 @@
 const state = {
   selectedRenterId: null,
-  searchQuery: '',
+  searchText: '',
   drawerOpen: false,
   paymentMethod: 'Cash',
   paymentOtherMethod: '',
   noteDraftByRenterId: {},
-  currentUser: null,
-  authReady: false,
-  authViewMode: 'signin', // "signin" | "signup"
-  authLoading: false,
-  authError: '',
-  renters: [],
-  businessProfile: null,
-  createRenterPanelOpen: false,
-  createRenterLoading: false,
-  createRenterError: '',
-  pendingOpenRenterId: null,
-  currentMonthKey: '',
-  selectedRenterPayments: [],
 };
 
 const listeners = new Set();
