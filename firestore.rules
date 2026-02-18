@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function createdAtIsValid() {
+      return !('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time;
+    }
+
+    function updatedAtIsValid() {
+      return !('updatedAt' in request.resource.data) || request.resource.data.updatedAt == request.time;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && createdAtIsValid() && updatedAtIsValid();
+      allow delete: if false;
+
+      match /renters/{renterId} {
+        allow read, create, update, delete: if isOwner(uid) && createdAtIsValid() && updatedAtIsValid();
+
+        match /events/{eventId} {
+          allow read, create, update, delete: if isOwner(uid) && createdAtIsValid() && updatedAtIsValid();
+        }
+      }
+
+      match /ledger/{entryId} {
+        allow read, create, update, delete: if isOwner(uid) && createdAtIsValid() && updatedAtIsValid();
+      }
+
+      match /invites/{inviteId} {
+        allow read, create, update, delete: if isOwner(uid) && createdAtIsValid() && updatedAtIsValid();
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
