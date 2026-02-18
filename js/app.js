@@ -2,9 +2,6 @@ import { createRenterShape } from './dataModel.js';
 import { getUiState, updateUiState } from './uiStore.js';
 import { createRenterCard } from './components/renterCard.js';
 import { closeDrawer, renderRenterDrawer } from './components/drawer.js';
-import { renderAuthView } from './views/authView.js';
-import { listenToAuthChanges, signOutUser } from './auth.js';
-import { firebaseReady } from './firebase-init.js';
 
 const renters = [
   createRenterShape({
@@ -75,15 +72,12 @@ const historyByRenterId = {
   },
 };
 
-const authViewElement = document.getElementById('authView');
-const dashboardViewElement = document.getElementById('dashboardView');
 const rentersListElement = document.getElementById('rentersList');
 const searchInput = document.getElementById('searchInput');
 const drawerElement = document.getElementById('renterDrawer');
 const overlayElement = document.getElementById('drawerOverlay');
 const menuButton = document.getElementById('menuButton');
 const menuPopover = document.getElementById('menuPopover');
-const logoutMenuItem = document.getElementById('logoutMenuItem');
 
 function renderRenters() {
   const { searchText } = getUiState();
@@ -110,39 +104,6 @@ function openRenterDrawer(renter) {
   });
 }
 
-function showAuthView() {
-  authViewElement.classList.remove('hidden');
-  dashboardViewElement.classList.add('hidden');
-  dashboardViewElement.setAttribute('aria-hidden', 'true');
-  renderAuthView(authViewElement);
-}
-
-function showDashboardView() {
-  authViewElement.classList.add('hidden');
-  dashboardViewElement.classList.remove('hidden');
-  dashboardViewElement.setAttribute('aria-hidden', 'false');
-  renderRenters();
-}
-
-function renderAppShell() {
-  const { authReady, currentUser, authError } = getUiState();
-
-  if (!authReady) return;
-
-  if (authError && !firebaseReady) {
-    authViewElement.innerHTML = `<div class="auth-card"><p class="auth-error">${authError}</p></div>`;
-    authViewElement.classList.remove('hidden');
-    dashboardViewElement.classList.add('hidden');
-    return;
-  }
-
-  if (currentUser) {
-    showDashboardView();
-  } else {
-    showAuthView();
-  }
-}
-
 function setupEvents() {
   searchInput.addEventListener('input', (event) => {
     updateUiState({ searchText: event.target.value });
@@ -153,11 +114,6 @@ function setupEvents() {
 
   menuButton.addEventListener('click', () => {
     menuPopover.classList.toggle('open');
-  });
-
-  logoutMenuItem.addEventListener('click', async () => {
-    await signOutUser();
-    menuPopover.classList.remove('open');
   });
 
   document.addEventListener('click', (event) => {
@@ -176,25 +132,8 @@ function setupEvents() {
 }
 
 function startApp() {
+  renderRenters();
   setupEvents();
-
-  if (!firebaseReady) {
-    updateUiState({
-      authReady: true,
-      authError: 'Firebase config is missing. Update js/appConfig.js with your project values to use sign in.',
-    });
-    renderAppShell();
-    return;
-  }
-
-  listenToAuthChanges((user) => {
-    updateUiState({
-      currentUser: user,
-      authReady: true,
-      authError: '',
-    });
-    renderAppShell();
-  });
 }
 
 startApp();
