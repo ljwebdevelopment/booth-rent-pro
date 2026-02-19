@@ -15,7 +15,7 @@
         </button>
       </div>
       <div id="menuPopover" class="menu-popover" aria-hidden="true">
-        <button class="menu-item" type="button">Settings</button>
+        <button id="menuSettingsButton" class="menu-item" type="button">Settings</button>
         <button id="menuArchiveButton" class="menu-item" type="button">Archive</button>
         <button class="menu-item" type="button">Help</button>
         <button class="menu-item btn-danger-text" type="button">Logout</button>
@@ -30,9 +30,62 @@
         <div id="rentersList" class="renters-list" aria-label="Renters list"></div>
 
         <section id="archivePanel" class="panel archive-panel hidden-panel" aria-label="Archive panel">
-          <div class="archive-header"><h3>Archive</h3><button id="closeArchivePanelButton" class="btn" type="button">Back to Renters</button></div>
+          <div class="archive-header">
+            <h3>Archive</h3>
+            <button id="closeArchivePanelButton" class="btn" type="button">Back to Renters</button>
+          </div>
           <p class="archive-subtitle">Archived renters can be restored or permanently deleted.</p>
           <div id="archiveContent"></div>
+        </section>
+
+        <section id="settingsPanel" class="panel settings-panel hidden-panel" aria-label="Settings panel">
+          <div class="settings-header">
+            <h3>Settings</h3>
+            <button id="closeSettingsPanelButton" class="btn" type="button">Back to Renters</button>
+          </div>
+          <p class="settings-subtitle">Manage your business profile and branding.</p>
+
+          <div class="panel settings-section">
+            <h4>Business Profile</h4>
+            <div class="settings-grid">
+              <label class="field">Business Name<input id="businessNameInput" type="text" /></label>
+              <label class="field">Phone<input id="businessPhoneInput" type="text" /></label>
+              <label class="field">Address 1<input id="businessAddress1Input" type="text" /></label>
+              <label class="field">Address 2<input id="businessAddress2Input" type="text" /></label>
+              <label class="field">City<input id="businessCityInput" type="text" /></label>
+              <label class="field">State<input id="businessStateInput" type="text" /></label>
+              <label class="field">Zip<input id="businessZipInput" type="text" /></label>
+            </div>
+            <div class="settings-actions">
+              <button id="saveSettingsButton" class="btn btn-primary" type="button">Save Settings</button>
+              <button id="cancelSettingsButton" class="btn" type="button">Cancel</button>
+              <span id="settingsSavedNotice" class="settings-notice hidden-panel">Saved.</span>
+            </div>
+            <p id="settingsError" class="btn-danger-text hidden-panel"></p>
+          </div>
+
+          <div class="panel settings-section">
+            <h4>Logo</h4>
+            <input id="logoFileInput" type="file" accept="image/png,image/jpeg,image/webp" class="hidden-panel" />
+            <div class="settings-actions">
+              <button id="uploadLogoButton" class="btn" type="button">Upload Logo</button>
+              <span id="logoProgressText"></span>
+            </div>
+            <p id="logoError" class="btn-danger-text hidden-panel"></p>
+            <div class="logo-preview-box"><img id="logoPreviewImage" alt="Logo preview" /></div>
+          </div>
+
+          <div class="panel settings-section">
+            <h4>Receipt Header Preview</h4>
+            <div class="receipt-preview-card">
+              <div class="receipt-preview-logo-wrap"><img id="receiptPreviewLogo" alt="Receipt logo preview" /></div>
+              <div>
+                <strong id="receiptPreviewBusinessName">Your business name</strong>
+                <div id="receiptPreviewPhone">Phone</div>
+                <div id="receiptPreviewLocation">City, ST ZIP</div>
+              </div>
+            </div>
+          </div>
         </section>
       </section>
 
@@ -40,7 +93,7 @@
         <button class="btn utility-btn" data-panel="create-renter" type="button">+ Create Renter</button>
         <button class="btn utility-btn" data-panel="create-charge" type="button">Create Charge</button>
         <button class="btn utility-btn" data-panel="history" type="button">History</button>
-        <button class="btn utility-btn" data-panel="settings" type="button">Settings</button>
+        <button id="railSettingsButton" class="btn utility-btn" data-panel="settings" type="button">Settings</button>
         <button id="railArchiveButton" class="btn utility-btn" data-panel="archive" type="button">Archive</button>
       </aside>
     </div>

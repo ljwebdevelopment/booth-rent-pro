@@ -1,3 +1,14 @@
+const emptyBusinessProfile = {
+  businessName: '',
+  phone: '',
+  address1: '',
+  address2: '',
+  city: '',
+  state: '',
+  zip: '',
+  logoUrl: '',
+};
+
 const state = {
   selectedRenterId: null,
   searchText: '',
@@ -17,6 +28,16 @@ const state = {
   deleteWorking: false,
   deleteError: null,
   deleteProgress: 0,
+  settingsOpen: false,
+  businessSaved: { ...emptyBusinessProfile },
+  businessDraft: { ...emptyBusinessProfile },
+  businessDirty: false,
+  settingsSaving: false,
+  settingsError: null,
+  settingsSavedNotice: false,
+  logoUploading: false,
+  logoProgress: 0,
+  logoError: null,
 };
 
 const listeners = new Set();

@@ -1,48 +1,25 @@
 import { createRenterShape } from './dataModel.js';
-import { billing, events as eventDb, ledger as ledgerDb, renters as renterDb, seedInMemoryDb } from './db.js';
+import {
+  billing,
+  branding,
+  business,
+  events as eventDb,
+  ledger as ledgerDb,
+  renters as renterDb,
+  seedInMemoryDb,
+} from './db.js';
 import { getUiState, updateUiState } from './uiStore.js';
 import { createRenterCard } from './components/renterCard.js';
 import { closeDrawer, renderRenterDrawer } from './components/drawer.js';
 
 const CURRENT_USER_UID = 'demo-user-1';
+const MAX_LOGO_BYTES = 3 * 1024 * 1024;
+const ALLOWED_LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
 const initialRenters = [
-  createRenterShape({
-    id: 'r1',
-    name: 'Ari Johnson',
-    email: 'ari@example.com',
-    phone: '312-555-1111',
-    monthlyRent: 900,
-    dueDayOfMonth: 5,
-    color: '#DDF3E6',
-    gradeScore: 94,
-    gradeLetter: 'A',
-    status: 'active',
-  }),
-  createRenterShape({
-    id: 'r2',
-    name: 'Mina Patel',
-    email: 'mina@example.com',
-    phone: '312-555-2222',
-    monthlyRent: 1050,
-    dueDayOfMonth: 12,
-    color: '#F3E4DD',
-    gradeScore: 84,
-    gradeLetter: 'B',
-    status: 'active',
-  }),
-  createRenterShape({
-    id: 'r3',
-    name: 'Jules Carter',
-    email: 'jules@example.com',
-    phone: '312-555-3333',
-    monthlyRent: 780,
-    dueDayOfMonth: 20,
-    color: '#DEEAF9',
-    gradeScore: 72,
-    gradeLetter: 'C',
-    status: 'active',
-  }),
+  createRenterShape({ id: 'r1', name: 'Ari Johnson', email: 'ari@example.com', phone: '312-555-1111', monthlyRent: 900, dueDayOfMonth: 5, color: '#DDF3E6', gradeScore: 94, gradeLetter: 'A', status: 'active' }),
+  createRenterShape({ id: 'r2', name: 'Mina Patel', email: 'mina@example.com', phone: '312-555-2222', monthlyRent: 1050, dueDayOfMonth: 12, color: '#F3E4DD', gradeScore: 84, gradeLetter: 'B', status: 'active' }),
+  createRenterShape({ id: 'r3', name: 'Jules Carter', email: 'jules@example.com', phone: '312-555-3333', monthlyRent: 780, dueDayOfMonth: 20, color: '#DEEAF9', gradeScore: 72, gradeLetter: 'C', status: 'active' }),
 ];
 
 const seededLedgerEntries = [
@@ -68,20 +45,44 @@ const menuArchiveButton = document.getElementById('menuArchiveButton');
 const archivePanelElement = document.getElementById('archivePanel');
 const archiveContentElement = document.getElementById('archiveContent');
 const closeArchivePanelButton = document.getElementById('closeArchivePanelButton');
+const railSettingsButton = document.getElementById('railSettingsButton');
+const menuSettingsButton = document.getElementById('menuSettingsButton');
+const settingsPanelElement = document.getElementById('settingsPanel');
+const closeSettingsPanelButton = document.getElementById('closeSettingsPanelButton');
+
+const settingsFieldMap = {
+  businessName: document.getElementById('businessNameInput'),
+  phone: document.getElementById('businessPhoneInput'),
+  address1: document.getElementById('businessAddress1Input'),
+  address2: document.getElementById('businessAddress2Input'),
+  city: document.getElementById('businessCityInput'),
+  state: document.getElementById('businessStateInput'),
+  zip: document.getElementById('businessZipInput'),
+};
+
+const saveSettingsButton = document.getElementById('saveSettingsButton');
+const cancelSettingsButton = document.getElementById('cancelSettingsButton');
+const settingsSavedNotice = document.getElementById('settingsSavedNotice');
+const settingsError = document.getElementById('settingsError');
+const logoFileInput = document.getElementById('logoFileInput');
+const uploadLogoButton = document.getElementById('uploadLogoButton');
+const logoProgressText = document.getElementById('logoProgressText');
+const logoError = document.getElementById('logoError');
+const logoPreviewImage = document.getElementById('logoPreviewImage');
+const receiptPreviewLogo = document.getElementById('receiptPreviewLogo');
+const receiptPreviewBusinessName = document.getElementById('receiptPreviewBusinessName');
+const receiptPreviewPhone = document.getElementById('receiptPreviewPhone');
+const receiptPreviewLocation = document.getElementById('receiptPreviewLocation');
 
 let removeReminderListener = null;
 let removeActiveRentersListener = null;
 let removeArchivedRentersListener = null;
 
-seedInMemoryDb(CURRENT_USER_UID, {
-  renters: initialRenters,
-  ledger: seededLedgerEntries,
-});
+seedInMemoryDb(CURRENT_USER_UID, { renters: initialRenters, ledger: seededLedgerEntries });
 
 function getCurrentMonthKey() {
   const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  return `${now.getFullYear()}-${month}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function toSafeDate(value) {
@@ -98,15 +99,11 @@ function toSafeDate(value) {
   }
 
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return new Date(0);
-  }
-
-  return parsed;
+  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
 }
 
 function formatMonthLabelFromMonthKey(monthKey) {
-  if (!monthKey || typeof monthKey !== 'string' || !monthKey.includes('-')) {
+  if (!monthKey || !monthKey.includes('-')) {
     return 'Unknown month';
   }
 
@@ -132,53 +129,67 @@ function showToast(message) {
   }, 1800);
 }
 
+function draftEqualsSaved(saved, draft) {
+  return JSON.stringify(saved) === JSON.stringify(draft);
+}
+
+function renderSettingsPanel() {
+  const uiState = getUiState();
+  const { businessDraft } = uiState;
+
+  Object.entries(settingsFieldMap).forEach(([key, input]) => {
+    input.value = businessDraft[key] || '';
+  });
+
+  saveSettingsButton.disabled = !uiState.businessDirty || uiState.settingsSaving;
+  saveSettingsButton.textContent = uiState.settingsSaving ? 'Saving...' : 'Save Settings';
+  cancelSettingsButton.disabled = uiState.settingsSaving;
+
+  settingsSavedNotice.classList.toggle('hidden-panel', !uiState.settingsSavedNotice);
+  settingsError.classList.toggle('hidden-panel', !uiState.settingsError);
+  settingsError.textContent = uiState.settingsError || '';
+
+  uploadLogoButton.disabled = uiState.logoUploading;
+  uploadLogoButton.textContent = uiState.logoUploading ? 'Uploading...' : 'Upload Logo';
+  logoProgressText.textContent = uiState.logoUploading ? `${Math.round(uiState.logoProgress)}%` : '';
+  logoError.classList.toggle('hidden-panel', !uiState.logoError);
+  logoError.textContent = uiState.logoError || '';
+
+  const logoUrl = businessDraft.logoUrl || '';
+  logoPreviewImage.src = logoUrl;
+  logoPreviewImage.style.display = logoUrl ? 'block' : 'none';
+
+  receiptPreviewLogo.src = logoUrl;
+  receiptPreviewLogo.style.display = logoUrl ? 'block' : 'none';
+  receiptPreviewBusinessName.textContent = businessDraft.businessName || 'Your business name';
+  receiptPreviewPhone.textContent = businessDraft.phone || 'Phone';
+  const location = [businessDraft.city, businessDraft.state, businessDraft.zip].filter(Boolean).join(', ');
+  receiptPreviewLocation.textContent = location || 'City, ST ZIP';
+}
+
 function computeStatusForRenter(renter, monthKey) {
   const entries = ledgerByRenterId[renter.id] || [];
-
-  const chargesTotal = entries
-    .filter((entry) => entry.type === 'charge' && entry.appliesToMonthKey === monthKey)
-    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-
-  const paymentsTotal = entries
-    .filter((entry) => entry.type === 'payment' && entry.appliesToMonthKey === monthKey)
-    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-
+  const chargesTotal = entries.filter((e) => e.type === 'charge' && e.appliesToMonthKey === monthKey).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const paymentsTotal = entries.filter((e) => e.type === 'payment' && e.appliesToMonthKey === monthKey).reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const remaining = Math.max(0, chargesTotal - paymentsTotal);
-  const now = new Date();
 
-  if (remaining === 0 && chargesTotal > 0) {
-    return { label: 'paid', chargesTotal, paymentsTotal, remaining };
-  }
-
-  if (paymentsTotal > 0 && remaining > 0) {
-    return { label: 'partial', chargesTotal, paymentsTotal, remaining };
-  }
-
-  if (now.getDate() > Number(renter.dueDayOfMonth) && remaining > 0) {
-    return { label: 'overdue', chargesTotal, paymentsTotal, remaining };
-  }
-
-  if (now.getDate() === Number(renter.dueDayOfMonth) && remaining > 0) {
-    return { label: 'due', chargesTotal, paymentsTotal, remaining };
-  }
-
-  return { label: 'upcoming', chargesTotal, paymentsTotal, remaining };
+  if (remaining === 0 && chargesTotal > 0) return { label: 'paid' };
+  if (paymentsTotal > 0 && remaining > 0) return { label: 'partial' };
+  if (new Date().getDate() > Number(renter.dueDayOfMonth) && remaining > 0) return { label: 'overdue' };
+  if (new Date().getDate() === Number(renter.dueDayOfMonth) && remaining > 0) return { label: 'due' };
+  return { label: 'upcoming' };
 }
 
 async function refreshRenterLedger(renterId) {
-  const entries = await ledgerDb.listByRenter(CURRENT_USER_UID, renterId);
-  ledgerByRenterId[renterId] = entries;
+  ledgerByRenterId[renterId] = await ledgerDb.listByRenter(CURRENT_USER_UID, renterId);
 }
 
 function getHistoryByMonthWithMergedData(renterId) {
   const mergedHistory = {};
 
-  const ledgerEntries = ledgerByRenterId[renterId] || [];
-  ledgerEntries.forEach((entry) => {
+  (ledgerByRenterId[renterId] || []).forEach((entry) => {
     const monthLabel = formatMonthLabelFromMonthKey(entry.appliesToMonthKey);
-    if (!mergedHistory[monthLabel]) {
-      mergedHistory[monthLabel] = [];
-    }
+    if (!mergedHistory[monthLabel]) mergedHistory[monthLabel] = [];
 
     mergedHistory[monthLabel].push({
       date: entry.date || entry.createdAt,
@@ -188,12 +199,9 @@ function getHistoryByMonthWithMergedData(renterId) {
     });
   });
 
-  const reminderEvents = reminderEventsByRenterId[renterId] || [];
-  reminderEvents.forEach((eventData) => {
+  (reminderEventsByRenterId[renterId] || []).forEach((eventData) => {
     const monthLabel = formatMonthLabelFromMonthKey(eventData.monthKey);
-    if (!mergedHistory[monthLabel]) {
-      mergedHistory[monthLabel] = [];
-    }
+    if (!mergedHistory[monthLabel]) mergedHistory[monthLabel] = [];
 
     mergedHistory[monthLabel].push({
       date: eventData.sentAt || eventData.createdAt,
@@ -210,47 +218,38 @@ function getHistoryByMonthWithMergedData(renterId) {
 }
 
 function getRenterById(renterId) {
-  return activeRenters.find((renter) => renter.id === renterId)
-    || getUiState().archivedRenters.find((renter) => renter.id === renterId)
-    || null;
+  return activeRenters.find((renter) => renter.id === renterId) || getUiState().archivedRenters.find((renter) => renter.id === renterId) || null;
 }
 
 function renderRenters() {
-  const { searchText, remindersByRenterForCurrentMonth, reminderPopoverOpenForRenterId, archiveOpen } = getUiState();
-  const normalizedSearch = searchText.trim().toLowerCase();
+  const uiState = getUiState();
+  const { searchText, remindersByRenterForCurrentMonth, reminderPopoverOpenForRenterId, archiveOpen, settingsOpen } = uiState;
   const monthKey = getCurrentMonthKey();
 
-  if (archiveOpen) {
+  if (archiveOpen || settingsOpen) {
     rentersListElement.classList.add('hidden-panel');
-    archivePanelElement.classList.remove('hidden-panel');
+    archivePanelElement.classList.toggle('hidden-panel', !archiveOpen);
+    settingsPanelElement.classList.toggle('hidden-panel', !settingsOpen);
     return;
   }
 
   rentersListElement.classList.remove('hidden-panel');
   archivePanelElement.classList.add('hidden-panel');
+  settingsPanelElement.classList.add('hidden-panel');
 
   const visibleRenters = activeRenters
-    .filter((renter) => renter.name.toLowerCase().includes(normalizedSearch))
-    .map((renter) => {
-      const status = computeStatusForRenter(renter, monthKey);
-      return {
-        ...renter,
-        statusLabel: status.label,
-      };
-    });
+    .filter((renter) => renter.name.toLowerCase().includes(searchText.trim().toLowerCase()))
+    .map((renter) => ({ ...renter, statusLabel: computeStatusForRenter(renter, monthKey).label }));
 
   rentersListElement.innerHTML = '';
   visibleRenters.forEach((renter) => {
-    const reminderDatesForMonth = remindersByRenterForCurrentMonth[renter.id] || [];
-
     const card = createRenterCard({
       renter,
-      reminderDatesForMonth,
+      reminderDatesForMonth: remindersByRenterForCurrentMonth[renter.id] || [],
       isReminderPopoverOpen: reminderPopoverOpenForRenterId === renter.id,
       onCardClick: openRenterDrawer,
       onReminderDotClick: toggleReminderPopover,
     });
-
     rentersListElement.appendChild(card);
   });
 }
@@ -260,7 +259,6 @@ function renderArchivePanel() {
   const archivedRenters = uiState.archivedRenters;
 
   archiveContentElement.innerHTML = '';
-
   if (uiState.archiveLoading) {
     archiveContentElement.textContent = 'Loading archived renters...';
     return;
@@ -292,17 +290,12 @@ function renderArchivePanel() {
     restoreButton.className = 'btn';
     restoreButton.textContent = 'Restore';
     restoreButton.addEventListener('click', async () => {
-      try {
-        const result = await renterDb.restore(CURRENT_USER_UID, renter.id);
-        if (!result.ok) {
-          showToast(result.error || 'Unable to restore renter.');
-          return;
-        }
-
-        showToast('Renter restored.');
-      } catch (error) {
-        showToast(`Unable to restore renter: ${error.message}`);
+      const result = await renterDb.restore(CURRENT_USER_UID, renter.id);
+      if (!result.ok) {
+        showToast(result.error || 'Unable to restore renter.');
+        return;
       }
+      showToast('Renter restored.');
     });
 
     const deleteButton = document.createElement('button');
@@ -310,12 +303,7 @@ function renderArchivePanel() {
     deleteButton.className = 'btn btn-danger-text';
     deleteButton.textContent = 'Permanently Delete';
     deleteButton.addEventListener('click', () => {
-      updateUiState({
-        deleteConfirmOpen: true,
-        deleteTargetRenterId: renter.id,
-        deleteConfirmText: '',
-        deleteError: null,
-      });
+      updateUiState({ deleteConfirmOpen: true, deleteTargetRenterId: renter.id, deleteConfirmText: '', deleteError: null });
       renderArchivePanel();
     });
 
@@ -326,18 +314,12 @@ function renderArchivePanel() {
 
   if (uiState.deleteConfirmOpen && uiState.deleteTargetRenterId) {
     const renter = archivedRenters.find((item) => item.id === uiState.deleteTargetRenterId);
-    if (!renter) {
-      return;
-    }
+    if (!renter) return;
 
     const modal = document.createElement('div');
     modal.className = 'archive-delete-modal';
     const matches = uiState.deleteConfirmText.trim() === renter.name;
-
-    modal.innerHTML = `
-      <h4>Permanently delete ${renter.name}? This cannot be undone.</h4>
-      <p>Type the renter's name to confirm:</p>
-    `;
+    modal.innerHTML = `<h4>Permanently delete ${renter.name}? This cannot be undone.</h4><p>Type the renter's name to confirm:</p>`;
 
     const input = document.createElement('input');
     input.className = 'search-input';
@@ -356,14 +338,7 @@ function renderArchivePanel() {
     cancelButton.className = 'btn';
     cancelButton.textContent = 'Cancel';
     cancelButton.addEventListener('click', () => {
-      updateUiState({
-        deleteConfirmOpen: false,
-        deleteTargetRenterId: null,
-        deleteConfirmText: '',
-        deleteWorking: false,
-        deleteError: null,
-        deleteProgress: 0,
-      });
+      updateUiState({ deleteConfirmOpen: false, deleteTargetRenterId: null, deleteConfirmText: '', deleteWorking: false, deleteError: null, deleteProgress: 0 });
       renderArchivePanel();
     });
 
@@ -378,7 +353,6 @@ function renderArchivePanel() {
 
       try {
         const result = await renterDb.permanentlyDelete(CURRENT_USER_UID, renter.id);
-
         if (!result.deletedRenter) {
           updateUiState({ deleteError: 'Failed to delete renter.', deleteWorking: false });
           renderArchivePanel();
@@ -388,14 +362,7 @@ function renderArchivePanel() {
         delete reminderEventsByRenterId[renter.id];
         delete ledgerByRenterId[renter.id];
 
-        updateUiState({
-          deleteConfirmOpen: false,
-          deleteTargetRenterId: null,
-          deleteConfirmText: '',
-          deleteWorking: false,
-          deleteProgress: result.deletedEvents + result.deletedLedger + 1,
-        });
-
+        updateUiState({ deleteConfirmOpen: false, deleteTargetRenterId: null, deleteConfirmText: '', deleteWorking: false, deleteProgress: result.deletedEvents + result.deletedLedger + 1 });
         showToast(`Deleted renter, ${result.deletedEvents} events, ${result.deletedLedger} ledger entries.`);
       } catch (error) {
         updateUiState({ deleteError: `Delete failed: ${error.message}`, deleteWorking: false });
@@ -406,7 +373,6 @@ function renderArchivePanel() {
     });
 
     actions.append(cancelButton, confirmDeleteButton);
-
     if (uiState.deleteError) {
       const errorLine = document.createElement('p');
       errorLine.className = 'btn-danger-text';
@@ -426,18 +392,12 @@ async function ensureChargeAndLedgerRefreshForRenter(renter) {
 
 async function openRenterDrawer(renter) {
   updateUiState({ selectedRenterId: renter.id });
-
   await ensureChargeAndLedgerRefreshForRenter(renter);
 
   const monthKey = getCurrentMonthKey();
   const paymentsThisMonth = (ledgerByRenterId[renter.id] || [])
     .filter((entry) => entry.type === 'payment' && entry.appliesToMonthKey === monthKey)
-    .map((entry) => ({
-      amount: Number(entry.amount || 0),
-      method: entry.method || 'Recorded payment',
-      note: entry.note || '',
-      date: toSafeDate(entry.date || entry.createdAt).toISOString().slice(0, 10),
-    }));
+    .map((entry) => ({ amount: Number(entry.amount || 0), method: entry.method || 'Recorded payment', note: entry.note || '', date: toSafeDate(entry.date || entry.createdAt).toISOString().slice(0, 10) }));
 
   renderRenterDrawer({
     drawerElement,
@@ -452,9 +412,7 @@ async function openRenterDrawer(renter) {
 
 async function rerenderOpenDrawerIfNeeded() {
   const { selectedRenterId, drawerOpen } = getUiState();
-  if (!drawerOpen || !selectedRenterId) {
-    return;
-  }
+  if (!drawerOpen || !selectedRenterId) return;
 
   const renter = getRenterById(selectedRenterId);
   if (!renter || renter.status !== 'active') {
@@ -466,18 +424,14 @@ async function rerenderOpenDrawerIfNeeded() {
 }
 
 async function archiveRenterFromDrawer(renterId) {
-  try {
-    const result = await renterDb.archive(CURRENT_USER_UID, renterId);
-    if (!result.ok) {
-      showToast(result.error || 'Unable to archive renter.');
-      return;
-    }
-
-    closeDrawer(drawerElement, overlayElement);
-    showToast('Renter archived.');
-  } catch (error) {
-    showToast(`Unable to archive renter: ${error.message}`);
+  const result = await renterDb.archive(CURRENT_USER_UID, renterId);
+  if (!result.ok) {
+    showToast(result.error || 'Unable to archive renter.');
+    return;
   }
+
+  closeDrawer(drawerElement, overlayElement);
+  showToast('Renter archived.');
 }
 
 async function markReminderSent(renterId) {
@@ -493,29 +447,20 @@ function toggleReminderPopover(renterId) {
 
 function startReminderListener() {
   const monthKey = getCurrentMonthKey();
-
-  if (removeReminderListener) {
-    removeReminderListener();
-  }
+  if (removeReminderListener) removeReminderListener();
 
   removeReminderListener = eventDb.listenRemindersForMonth(CURRENT_USER_UID, monthKey, (eventsForMonth) => {
     const grouped = {};
     const allByRenter = {};
 
     eventsForMonth.forEach((eventData) => {
-      if (!grouped[eventData.renterId]) {
-        grouped[eventData.renterId] = [];
-      }
+      if (!grouped[eventData.renterId]) grouped[eventData.renterId] = [];
+      if (!allByRenter[eventData.renterId]) allByRenter[eventData.renterId] = [];
       grouped[eventData.renterId].push(eventData.sentAt);
-
-      if (!allByRenter[eventData.renterId]) {
-        allByRenter[eventData.renterId] = [];
-      }
       allByRenter[eventData.renterId].push(eventData);
     });
 
     Object.keys(grouped).forEach((renterId) => grouped[renterId].sort((a, b) => toSafeDate(b) - toSafeDate(a)));
-
     Object.keys(allByRenter).forEach((renterId) => {
       allByRenter[renterId].sort((a, b) => toSafeDate(b.sentAt) - toSafeDate(a.sentAt));
       reminderEventsByRenterId[renterId] = allByRenter[renterId];
@@ -530,20 +475,14 @@ function startReminderListener() {
 async function startRenterListeners() {
   updateUiState({ archiveLoading: true, archiveError: null });
 
-  if (removeActiveRentersListener) {
-    removeActiveRentersListener();
-  }
-
-  if (removeArchivedRentersListener) {
-    removeArchivedRentersListener();
-  }
+  if (removeActiveRentersListener) removeActiveRentersListener();
+  if (removeArchivedRentersListener) removeArchivedRentersListener();
 
   removeActiveRentersListener = renterDb.listen(CURRENT_USER_UID, { status: 'active' }, async (nextRenters) => {
     activeRenters = nextRenters;
 
     for (let index = 0; index < activeRenters.length; index += 1) {
-      const renter = activeRenters[index];
-      await ensureChargeAndLedgerRefreshForRenter(renter);
+      await ensureChargeAndLedgerRefreshForRenter(activeRenters[index]);
     }
 
     renderRenters();
@@ -556,13 +495,22 @@ async function startRenterListeners() {
   });
 }
 
-function openArchivePanel() {
+async function loadBusinessProfileIfNeeded() {
+  const uiState = getUiState();
+  if (uiState.businessSaved && uiState.businessSaved.updatedAt) {
+    return;
+  }
+
+  const profile = await business.get(CURRENT_USER_UID);
   updateUiState({
-    archiveOpen: true,
-    deleteConfirmOpen: false,
-    deleteTargetRenterId: null,
-    deleteConfirmText: '',
+    businessSaved: { ...profile },
+    businessDraft: { ...profile },
+    businessDirty: false,
   });
+}
+
+function openArchivePanel() {
+  updateUiState({ archiveOpen: true, settingsOpen: false, deleteConfirmOpen: false, deleteTargetRenterId: null, deleteConfirmText: '' });
   menuPopover.classList.remove('open');
   renderArchivePanel();
   renderRenters();
@@ -573,6 +521,113 @@ function closeArchivePanel() {
   renderRenters();
 }
 
+async function openSettingsPanel() {
+  await loadBusinessProfileIfNeeded();
+  updateUiState({ settingsOpen: true, archiveOpen: false, settingsError: null, logoError: null });
+  menuPopover.classList.remove('open');
+  renderSettingsPanel();
+  renderRenters();
+}
+
+function closeSettingsPanel() {
+  updateUiState({ settingsOpen: false });
+  renderRenters();
+}
+
+function onBusinessDraftChange(field, value) {
+  const uiState = getUiState();
+  const nextDraft = { ...uiState.businessDraft, [field]: value };
+  updateUiState({
+    businessDraft: nextDraft,
+    businessDirty: !draftEqualsSaved(uiState.businessSaved, nextDraft),
+    settingsSavedNotice: false,
+    settingsError: null,
+  });
+  renderSettingsPanel();
+}
+
+async function saveBusinessSettings() {
+  const uiState = getUiState();
+
+  if (!uiState.businessDraft.businessName.trim()) {
+    updateUiState({ settingsError: 'Business name is required.' });
+    renderSettingsPanel();
+    return;
+  }
+
+  updateUiState({ settingsSaving: true, settingsError: null, settingsSavedNotice: false });
+  renderSettingsPanel();
+
+  try {
+    const saved = await business.update(CURRENT_USER_UID, uiState.businessDraft);
+    updateUiState({
+      businessSaved: { ...saved },
+      businessDraft: { ...saved },
+      businessDirty: false,
+      settingsSaving: false,
+      settingsSavedNotice: true,
+    });
+    showToast('Settings saved.');
+  } catch (error) {
+    updateUiState({ settingsSaving: false, settingsError: `Unable to save settings: ${error.message}` });
+  }
+
+  renderSettingsPanel();
+}
+
+function cancelBusinessSettings() {
+  const uiState = getUiState();
+  updateUiState({ businessDraft: { ...uiState.businessSaved }, businessDirty: false, settingsError: null, settingsSavedNotice: false });
+  renderSettingsPanel();
+}
+
+async function handleLogoSelected(file) {
+  if (!file) {
+    return;
+  }
+
+  if (!ALLOWED_LOGO_TYPES.has(file.type)) {
+    updateUiState({ logoError: 'Only PNG, JPG, and WEBP files are allowed.' });
+    renderSettingsPanel();
+    return;
+  }
+
+  if (file.size > MAX_LOGO_BYTES) {
+    updateUiState({ logoError: 'Logo must be 3MB or smaller.' });
+    renderSettingsPanel();
+    return;
+  }
+
+  updateUiState({ logoUploading: true, logoProgress: 0, logoError: null, settingsSavedNotice: false });
+  renderSettingsPanel();
+
+  try {
+    const result = await branding.uploadLogo(CURRENT_USER_UID, file, (percent) => {
+      updateUiState({ logoProgress: percent });
+      renderSettingsPanel();
+    });
+
+    const updatedProfile = await business.get(CURRENT_USER_UID);
+    const mergedDraft = { ...updatedProfile, logoUrl: result.logoUrl || updatedProfile.logoUrl || '' };
+
+    updateUiState({
+      businessSaved: { ...mergedDraft },
+      businessDraft: { ...mergedDraft },
+      businessDirty: false,
+      logoUploading: false,
+      logoProgress: 100,
+      logoError: null,
+      settingsSavedNotice: true,
+    });
+
+    showToast('Logo uploaded.');
+  } catch (error) {
+    updateUiState({ logoUploading: false, logoError: `Upload failed: ${error.message}` });
+  }
+
+  renderSettingsPanel();
+}
+
 function setupEvents() {
   searchInput.addEventListener('input', (event) => {
     updateUiState({ searchText: event.target.value });
@@ -580,9 +635,31 @@ function setupEvents() {
   });
 
   overlayElement.addEventListener('click', () => closeDrawer(drawerElement, overlayElement));
+
   railArchiveButton.addEventListener('click', openArchivePanel);
   menuArchiveButton.addEventListener('click', openArchivePanel);
   closeArchivePanelButton.addEventListener('click', closeArchivePanel);
+
+  railSettingsButton.addEventListener('click', openSettingsPanel);
+  menuSettingsButton.addEventListener('click', openSettingsPanel);
+  closeSettingsPanelButton.addEventListener('click', closeSettingsPanel);
+
+  Object.entries(settingsFieldMap).forEach(([field, input]) => {
+    input.addEventListener('input', (event) => onBusinessDraftChange(field, event.target.value));
+  });
+
+  saveSettingsButton.addEventListener('click', saveBusinessSettings);
+  cancelSettingsButton.addEventListener('click', cancelBusinessSettings);
+
+  uploadLogoButton.addEventListener('click', () => {
+    logoFileInput.value = '';
+    logoFileInput.click();
+  });
+
+  logoFileInput.addEventListener('change', (event) => {
+    const [file] = event.target.files || [];
+    handleLogoSelected(file);
+  });
 
   menuButton.addEventListener('click', () => menuPopover.classList.toggle('open'));
 
@@ -613,7 +690,9 @@ function setupEvents() {
 
 async function startApp() {
   await startRenterListeners();
+  await loadBusinessProfileIfNeeded();
   startReminderListener();
+  renderSettingsPanel();
   renderRenters();
   setupEvents();
 }

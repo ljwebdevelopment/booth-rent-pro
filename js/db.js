@@ -1,10 +1,10 @@
-// In-memory database facade that mirrors Firestore paths and query shapes.
-// This keeps Firestore logic centralized in one module so UI files stay clean.
+import { getFirebaseServices } from './firebase-init.js';
 
 const dbState = {
   rentersByUid: {},
   eventsByUidAndRenter: {},
   ledgerByUid: {},
+  usersByUid: {},
 };
 
 const rentersListeners = new Set();
@@ -43,6 +43,24 @@ function uidEvents(uid, renterId) {
   return eventsMap[renterId];
 }
 
+function uidUserDoc(uid) {
+  if (!dbState.usersByUid[uid]) {
+    dbState.usersByUid[uid] = {
+      businessName: '',
+      phone: '',
+      address1: '',
+      address2: '',
+      city: '',
+      state: '',
+      zip: '',
+      logoUrl: '',
+      updatedAt: null,
+    };
+  }
+
+  return dbState.usersByUid[uid];
+}
+
 function toMonthKey(dateInput) {
   const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
   const year = date.getFullYear();
@@ -56,6 +74,28 @@ function toSerializableDate(value) {
   }
 
   return new Date(value);
+}
+
+function loadUserDocFromLocalStorage(uid) {
+  try {
+    const raw = localStorage.getItem(`brp_user_${uid}`);
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw);
+    dbState.usersByUid[uid] = { ...uidUserDoc(uid), ...parsed };
+  } catch (error) {
+    console.warn('Unable to load user profile from localStorage.', error);
+  }
+}
+
+function saveUserDocToLocalStorage(uid) {
+  try {
+    localStorage.setItem(`brp_user_${uid}`, JSON.stringify(uidUserDoc(uid)));
+  } catch (error) {
+    console.warn('Unable to persist user profile in localStorage.', error);
+  }
 }
 
 function notifyRentersListeners(uid) {
@@ -100,19 +140,67 @@ function notifyReminderListeners(uid) {
   });
 }
 
-export function seedInMemoryDb(uid, { renters = [], eventsByRenterId = {}, ledger = [] }) {
-  dbState.rentersByUid[uid] = renters.map((renter) => ({
-    ...renter,
-    status: renter.status || 'active',
-  }));
-
+export function seedInMemoryDb(uid, { renters = [], eventsByRenterId = {}, ledger = [], userDoc = null }) {
+  dbState.rentersByUid[uid] = renters.map((renter) => ({ ...renter, status: renter.status || 'active' }));
   dbState.eventsByUidAndRenter[uid] = {};
+  dbState.ledgerByUid[uid] = ledger.map((entry) => ({ ...entry }));
+
   Object.entries(eventsByRenterId).forEach(([renterId, eventList]) => {
     dbState.eventsByUidAndRenter[uid][renterId] = eventList.map((eventData) => ({ ...eventData }));
   });
 
-  dbState.ledgerByUid[uid] = ledger.map((entry) => ({ ...entry }));
+  loadUserDocFromLocalStorage(uid);
+  if (userDoc) {
+    dbState.usersByUid[uid] = { ...uidUserDoc(uid), ...userDoc };
+    saveUserDocToLocalStorage(uid);
+  }
 }
+
+export const business = {
+  async get(uid) {
+    loadUserDocFromLocalStorage(uid);
+    return { ...uidUserDoc(uid) };
+  },
+
+  async update(uid, patch) {
+    const userDoc = uidUserDoc(uid);
+    Object.assign(userDoc, patch, { updatedAt: new Date() });
+    saveUserDocToLocalStorage(uid);
+    return { ...userDoc };
+  },
+};
+
+export const branding = {
+  async uploadLogo(uid, file, onProgress) {
+    const services = getFirebaseServices();
+    const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'png';
+    const storagePath = `users/${uid}/branding/logo.${extension}`;
+
+    // In this scaffold there is no configured Storage instance. We still keep the
+    // DB-layer-only contract and progress callback behavior.
+    if (!services.storage) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onloadstart = () => onProgress?.(5);
+        reader.onprogress = () => onProgress?.(55);
+        reader.onerror = () => reject(new Error('Could not read the logo file.'));
+
+        reader.onload = async () => {
+          onProgress?.(100);
+          const logoUrl = String(reader.result || '');
+          await business.update(uid, { logoUrl, logoStoragePath: storagePath });
+          resolve({ logoUrl });
+        };
+
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // TODO (later prompt): replace this block with uploadBytesResumable/getDownloadURL once Firebase config is active.
+    return { logoUrl: '' };
+  },
+};
 
 export async function fetchRentersForUser(uid) {
   return { ok: true, uid, renters: uidRenters(uid).map((renter) => ({ ...renter })) };
@@ -180,7 +268,6 @@ export const renters = {
 
     const renter = uidRenters(uid).find((item) => item.id === renterId);
     if (renter) {
-      // Soft-permanent marker first so a real backend could reconcile safely.
       renter.pendingPermanentDeleteAt = new Date();
       renter.updatedAt = new Date();
     }
@@ -188,7 +275,6 @@ export const renters = {
     const eventsMap = uidEventsMap(uid);
     const renterEvents = eventsMap[renterId] ? [...eventsMap[renterId]] : [];
     let eventCursor = 0;
-
     while (eventCursor < renterEvents.length) {
       const chunk = renterEvents.slice(eventCursor, eventCursor + chunkSize);
       deletedEvents += chunk.length;
@@ -203,7 +289,6 @@ export const renters = {
     let remainingMatches = true;
     while (remainingMatches) {
       const chunkIndexes = [];
-
       for (let index = 0; index < ledgerEntries.length; index += 1) {
         if (ledgerEntries[index].renterId === renterId) {
           chunkIndexes.push(index);
@@ -227,7 +312,6 @@ export const renters = {
     const rentersList = uidRenters(uid);
     const renterIndex = rentersList.findIndex((item) => item.id === renterId);
     const deletedRenter = renterIndex >= 0;
-
     if (deletedRenter) {
       rentersList.splice(renterIndex, 1);
     }
@@ -241,9 +325,7 @@ export const renters = {
 
 export const ledger = {
   async listByRenter(uid, renterId) {
-    return uidLedger(uid)
-      .filter((entry) => entry.renterId === renterId)
-      .map((entry) => ({ ...entry }));
+    return uidLedger(uid).filter((entry) => entry.renterId === renterId).map((entry) => ({ ...entry }));
   },
 };
 
@@ -253,11 +335,7 @@ export const billing = {
     const entries = uidLedger(uid);
 
     const hasChargeForMonth = entries.some((entry) => {
-      return (
-        entry.renterId === renter.id
-        && entry.type === 'charge'
-        && entry.appliesToMonthKey === monthKey
-      );
+      return entry.renterId === renter.id && entry.type === 'charge' && entry.appliesToMonthKey === monthKey;
     });
 
     if (hasChargeForMonth) {
