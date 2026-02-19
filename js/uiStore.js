@@ -7,16 +7,6 @@ const state = {
   noteDraftByRenterId: {},
   remindersByRenterForCurrentMonth: {},
   reminderPopoverOpenForRenterId: null,
-  archiveOpen: false,
-  archivedRenters: [],
-  archiveLoading: false,
-  archiveError: null,
-  deleteConfirmOpen: false,
-  deleteTargetRenterId: null,
-  deleteConfirmText: '',
-  deleteWorking: false,
-  deleteError: null,
-  deleteProgress: 0,
 };
 
 const listeners = new Set();

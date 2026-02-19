@@ -36,7 +36,6 @@ export function renderRenterDrawer({
   paymentsThisMonth,
   historyByMonth,
   onMarkReminderSent,
-  onArchiveRenter,
 }) {
   const uiState = getUiState();
   drawerElement.innerHTML = '';

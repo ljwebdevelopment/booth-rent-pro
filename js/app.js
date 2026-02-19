@@ -1,12 +1,12 @@
 import { createRenterShape } from './dataModel.js';
-import { events as eventDb, renters as renterDb, seedInMemoryDb } from './db.js';
+import { events as eventDb } from './db.js';
 import { getUiState, updateUiState } from './uiStore.js';
 import { createRenterCard } from './components/renterCard.js';
 import { closeDrawer, renderRenterDrawer } from './components/drawer.js';
 
 const CURRENT_USER_UID = 'demo-user-1';
 
-const initialRenters = [
+const renters = [
   createRenterShape({
     id: 'r1',
     name: 'Ari Johnson',
@@ -76,7 +76,6 @@ const baseHistoryByRenterId = {
 };
 
 const reminderEventsByRenterId = {};
-let activeRenters = [];
 
 const rentersListElement = document.getElementById('rentersList');
 const searchInput = document.getElementById('searchInput');
@@ -153,8 +152,66 @@ function getRenterById(renterId) {
     || null;
 }
 
+let removeReminderListener = null;
+
+function getCurrentMonthKey() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${now.getFullYear()}-${month}`;
+}
+
+function formatMonthLabel(dateInput) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date);
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'app-toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add('open');
+  });
+
+  window.setTimeout(() => {
+    toast.classList.remove('open');
+    window.setTimeout(() => toast.remove(), 180);
+  }, 1800);
+}
+
+function getHistoryByMonthWithReminders(renterId) {
+  const baseHistory = baseHistoryByRenterId[renterId] || {};
+  const mergedHistory = JSON.parse(JSON.stringify(baseHistory));
+  const reminderEvents = reminderEventsByRenterId[renterId] || [];
+
+  reminderEvents.forEach((eventData) => {
+    const monthLabel = formatMonthLabel(eventData.sentAt);
+    if (!mergedHistory[monthLabel]) {
+      mergedHistory[monthLabel] = [];
+    }
+
+    mergedHistory[monthLabel].push({
+      date: eventData.sentAt,
+      type: 'Reminder marked sent',
+      note: eventData.message || '',
+    });
+  });
+
+  Object.keys(mergedHistory).forEach((monthLabel) => {
+    mergedHistory[monthLabel].sort((a, b) => new Date(b.date) - new Date(a.date));
+  });
+
+  return mergedHistory;
+}
+
+function getRenterById(renterId) {
+  return renters.find((renter) => renter.id === renterId) || null;
+}
+
 function renderRenters() {
-  const { searchText, remindersByRenterForCurrentMonth, reminderPopoverOpenForRenterId, archiveOpen } = getUiState();
+  const { searchText, remindersByRenterForCurrentMonth, reminderPopoverOpenForRenterId } = getUiState();
   const normalizedSearch = searchText.trim().toLowerCase();
 
   if (archiveOpen) {
@@ -345,7 +402,71 @@ function openRenterDrawer(renter) {
     paymentsThisMonth: paymentsByRenterId[renter.id] || [],
     historyByMonth: getHistoryByMonthWithReminders(renter.id),
     onMarkReminderSent: markReminderSent,
-    onArchiveRenter: archiveRenterFromDrawer,
+  });
+}
+
+function rerenderOpenDrawerIfNeeded() {
+  const { selectedRenterId, drawerOpen } = getUiState();
+  if (!drawerOpen || !selectedRenterId) {
+    return;
+  }
+
+  const renter = getRenterById(selectedRenterId);
+  if (!renter) {
+    return;
+  }
+
+  openRenterDrawer(renter);
+}
+
+async function markReminderSent(renterId) {
+  const sentAt = new Date();
+  await eventDb.logReminderSent(CURRENT_USER_UID, renterId, sentAt);
+  showToast('Reminder marked sent.');
+}
+
+function toggleReminderPopover(renterId) {
+  const { reminderPopoverOpenForRenterId } = getUiState();
+  const nextValue = reminderPopoverOpenForRenterId === renterId ? null : renterId;
+  updateUiState({ reminderPopoverOpenForRenterId: nextValue });
+  renderRenters();
+}
+
+function startReminderListener() {
+  const monthKey = getCurrentMonthKey();
+
+  if (removeReminderListener) {
+    removeReminderListener();
+  }
+
+  removeReminderListener = eventDb.listenRemindersForMonth(CURRENT_USER_UID, monthKey, (eventsForMonth) => {
+    const grouped = {};
+    const allByRenter = {};
+
+    eventsForMonth.forEach((eventData) => {
+      if (!grouped[eventData.renterId]) {
+        grouped[eventData.renterId] = [];
+      }
+      grouped[eventData.renterId].push(eventData.sentAt);
+
+      if (!allByRenter[eventData.renterId]) {
+        allByRenter[eventData.renterId] = [];
+      }
+      allByRenter[eventData.renterId].push(eventData);
+    });
+
+    Object.keys(grouped).forEach((renterId) => {
+      grouped[renterId].sort((a, b) => new Date(b) - new Date(a));
+    });
+
+    Object.keys(allByRenter).forEach((renterId) => {
+      allByRenter[renterId].sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+      reminderEventsByRenterId[renterId] = allByRenter[renterId];
+    });
+
+    updateUiState({ remindersByRenterForCurrentMonth: grouped });
+    renderRenters();
+    rerenderOpenDrawerIfNeeded();
   });
 }
 
@@ -474,6 +595,7 @@ function setupEvents() {
     if (event.key === 'Escape') {
       menuPopover.classList.remove('open');
       closeDrawer(drawerElement, overlayElement);
+
       if (getUiState().reminderPopoverOpenForRenterId) {
         updateUiState({ reminderPopoverOpenForRenterId: null });
         renderRenters();
@@ -483,7 +605,6 @@ function setupEvents() {
 }
 
 function startApp() {
-  startRenterListeners();
   startReminderListener();
   renderRenters();
   setupEvents();
