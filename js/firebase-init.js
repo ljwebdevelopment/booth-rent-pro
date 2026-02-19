@@ -1,10 +1,19 @@
-// Firebase initialization stub.
-// Prompt 2 will add real configuration and initialization using modular Firebase APIs.
+// Firebase initialization shim.
+// Real Firebase config can replace these stubs later without changing callers.
+
+let cachedServices = null;
 
 export function getFirebaseServices() {
-  return {
+  if (cachedServices) {
+    return cachedServices;
+  }
+
+  cachedServices = {
     app: null,
     auth: null,
     db: null,
+    storage: null,
   };
+
+  return cachedServices;
 }
