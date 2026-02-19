@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BoothRent Pro App</title>
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body class="page-app">
+    <section id="authView" class="auth-view" aria-live="polite"></section>
+
+    <section id="dashboardView" class="dashboard-view hidden" aria-hidden="true">
+      <header class="shell-header">
+        <div class="brand">BoothRent Pro</div>
+        <div>
+          <button id="menuButton" class="hamburger" aria-label="Open menu" type="button">
+            <span class="hamburger-lines"></span>
+          </button>
+        </div>
+        <div id="menuPopover" class="menu-popover" aria-hidden="true">
+          <button class="menu-item" type="button">Settings</button>
+          <button class="menu-item" type="button">Archive</button>
+          <button class="menu-item" type="button">Help</button>
+          <button id="logoutMenuItem" class="menu-item btn-danger-text" type="button">Logout</button>
+        </div>
+      </header>
+
+      <div class="app-layout">
+        <section class="main-column">
+          <div class="search-wrap">
+            <input id="searchInput" class="search-input" type="text" placeholder="Search renters by name, phone, or email" />
+          </div>
+          <div id="rentersList" class="renters-list" aria-label="Renters list"></div>
+        </section>
+
+        <aside class="utility-rail" aria-label="Utility actions">
+          <button id="openCreateRenterButton" class="btn btn-primary utility-btn" type="button">+ Create Renter</button>
+          <button id="openCreateChargeButton" class="btn utility-btn" type="button">Create Charge</button>
+          <button class="btn utility-btn" type="button">History</button>
+          <button class="btn utility-btn" type="button">Settings</button>
+          <button class="btn utility-btn" type="button">Archive</button>
+        </aside>
+      </div>
+
+      <div id="createRenterOverlay" class="panel-overlay"></div>
+      <aside id="createRenterPanel" class="side-panel" aria-hidden="true">
+        <div class="side-panel-header">
+          <h2>Create Renter</h2>
+          <button id="cancelCreateRenterTop" class="btn" type="button">Cancel</button>
+        </div>
+
+        <form id="createRenterForm" class="side-panel-body">
+          <label class="field">
+            Renter Name
+            <input type="text" name="name" required placeholder="Enter renter name" />
+          </label>
+
+          <label class="field">
+            Phone
+            <input type="text" name="phone" placeholder="Optional phone" />
+          </label>
+
+          <label class="field">
+            Email
+            <input type="email" name="email" placeholder="Optional email" />
+          </label>
+
+          <label class="field">
+            Monthly Rent
+            <input type="number" name="monthlyRent" min="0" step="0.01" placeholder="0.00" />
+          </label>
+
+          <label class="field">
+            Due Day of Month (1–28)
+            <input type="number" name="dueDayOfMonth" min="1" max="28" placeholder="1" />
+            <small class="field-help">Due day sets when rent becomes due each month.</small>
+          </label>
+
+          <p id="createRenterError" class="auth-error hidden"></p>
+
+          <div class="panel-actions">
+            <button id="submitCreateRenter" class="btn btn-primary" type="submit">Create Renter</button>
+            <button id="cancelCreateRenter" class="btn" type="button">Cancel</button>
+          </div>
+        </form>
+      </aside>
+
+      <div id="createChargeOverlay" class="panel-overlay"></div>
+      <aside id="createChargePanel" class="side-panel" aria-hidden="true">
+        <div class="side-panel-header">
+          <h2>Create Charge</h2>
+          <button id="cancelCreateChargeTop" class="btn" type="button">Cancel</button>
+        </div>
+
+        <form id="createChargeForm" class="side-panel-body">
+          <div class="panel-subtitle">Charge Details</div>
+
+          <label class="field">
+            Amount
+            <input id="createChargeAmount" type="number" min="0.01" step="0.01" placeholder="0.00" required />
+          </label>
+
+          <label class="field">
+            Description / Note
+            <input id="createChargeNote" type="text" placeholder="Monthly chair rent, late fee, etc." required />
+          </label>
+
+          <div class="field">
+            <div>Applies to Month</div>
+            <div id="createChargeMonthDropdown"></div>
+          </div>
+
+          <div class="panel-subtitle">Select Renters (Active)</div>
+
+          <label class="field">
+            Search renters
+            <input id="createChargeRenterSearch" type="text" placeholder="Filter renters by name, phone, email" />
+          </label>
+
+          <div class="inline-actions">
+            <button id="selectAllChargeRenters" class="btn" type="button">Select All</button>
+            <button id="clearChargeRenters" class="btn" type="button">Clear</button>
+            <span id="chargeSelectedCount" class="field-help">Selected: 0</span>
+          </div>
+
+          <div id="createChargeRentersList" class="charge-renter-list"></div>
+
+          <p id="createChargeError" class="auth-error hidden"></p>
+          <p id="createChargeResult" class="notes-message"></p>
+
+          <div class="panel-actions">
+            <button id="submitCreateCharge" class="btn btn-primary" type="submit">Create Charges</button>
+            <button id="cancelCreateCharge" class="btn" type="button">Cancel</button>
+          </div>
+        </form>
+      </aside>
+
+      <div id="drawerOverlay" class="drawer-overlay"></div>
+      <aside id="renterDrawer" class="drawer" aria-hidden="true"></aside>
+    </section>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
