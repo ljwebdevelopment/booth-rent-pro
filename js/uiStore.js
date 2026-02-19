@@ -5,6 +5,8 @@ const state = {
   paymentMethod: 'Cash',
   paymentOtherMethod: '',
   noteDraftByRenterId: {},
+  remindersByRenterForCurrentMonth: {},
+  reminderPopoverOpenForRenterId: null,
 };
 
 const listeners = new Set();
