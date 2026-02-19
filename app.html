@@ -16,7 +16,7 @@
       </div>
       <div id="menuPopover" class="menu-popover" aria-hidden="true">
         <button class="menu-item" type="button">Settings</button>
-        <button class="menu-item" type="button">Archive</button>
+        <button id="menuArchiveButton" class="menu-item" type="button">Archive</button>
         <button class="menu-item" type="button">Help</button>
         <button class="menu-item btn-danger-text" type="button">Logout</button>
       </div>
@@ -28,6 +28,12 @@
           <input id="searchInput" class="search-input" type="text" placeholder="Search renters" />
         </div>
         <div id="rentersList" class="renters-list" aria-label="Renters list"></div>
+
+        <section id="archivePanel" class="panel archive-panel hidden-panel" aria-label="Archive panel">
+          <div class="archive-header"><h3>Archive</h3><button id="closeArchivePanelButton" class="btn" type="button">Back to Renters</button></div>
+          <p class="archive-subtitle">Archived renters can be restored or permanently deleted.</p>
+          <div id="archiveContent"></div>
+        </section>
       </section>
 
       <aside class="utility-rail" aria-label="Utility actions">
@@ -35,14 +41,13 @@
         <button class="btn utility-btn" data-panel="create-charge" type="button">Create Charge</button>
         <button class="btn utility-btn" data-panel="history" type="button">History</button>
         <button class="btn utility-btn" data-panel="settings" type="button">Settings</button>
-        <button class="btn utility-btn" data-panel="archive" type="button">Archive</button>
+        <button id="railArchiveButton" class="btn utility-btn" data-panel="archive" type="button">Archive</button>
       </aside>
     </div>
 
     <section id="hiddenPanels" aria-hidden="true">
       <div id="panel-create-renter" class="hidden-panel">Create Renter panel</div>
       <div id="panel-settings" class="hidden-panel">Settings panel</div>
-      <div id="panel-archive" class="hidden-panel">Archive panel</div>
       <div id="panel-history" class="hidden-panel">History panel</div>
       <div id="panel-create-charge" class="hidden-panel">Create Charge panel</div>
     </section>

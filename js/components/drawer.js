@@ -17,7 +17,27 @@ function formatMoney(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
 
-export function renderRenterDrawer({ drawerElement, overlayElement, renter, paymentsThisMonth, historyByMonth }) {
+function formatReminderDate(dateInput) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+export function renderRenterDrawer({
+  drawerElement,
+  overlayElement,
+  renter,
+  paymentsThisMonth,
+  historyByMonth,
+  onMarkReminderSent,
+  onArchiveRenter,
+}) {
   const uiState = getUiState();
   drawerElement.innerHTML = '';
 
@@ -28,12 +48,39 @@ export function renderRenterDrawer({ drawerElement, overlayElement, renter, paym
   title.textContent = renter.name;
   title.style.margin = '0';
 
+  const headerActions = document.createElement('div');
+  headerActions.className = 'drawer-header-actions';
+
+  const moreButton = document.createElement('button');
+  moreButton.type = 'button';
+  moreButton.className = 'btn btn-ghost';
+  moreButton.textContent = '⋯';
+
+  const drawerMenu = document.createElement('div');
+  drawerMenu.className = 'drawer-menu-popover';
+
+  const archiveButton = document.createElement('button');
+  archiveButton.type = 'button';
+  archiveButton.className = 'menu-item';
+  archiveButton.textContent = 'Archive renter';
+  archiveButton.addEventListener('click', () => {
+    onArchiveRenter(renter.id);
+  });
+
+  drawerMenu.appendChild(archiveButton);
+
+  moreButton.addEventListener('click', () => {
+    drawerMenu.classList.toggle('open');
+  });
+
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
   closeButton.className = 'btn';
   closeButton.textContent = 'Close';
   closeButton.addEventListener('click', () => closeDrawer(drawerElement, overlayElement));
-  header.append(title, closeButton);
+
+  headerActions.append(moreButton, drawerMenu, closeButton);
+  header.append(title, headerActions);
 
   const body = document.createElement('div');
   body.className = 'drawer-body';
@@ -112,8 +159,21 @@ export function renderRenterDrawer({ drawerElement, overlayElement, renter, paym
   otherInput.value = uiState.paymentOtherMethod;
   otherInput.addEventListener('input', (event) => updateUiState({ paymentOtherMethod: event.target.value }));
 
+  const reminderActionRow = document.createElement('div');
+  reminderActionRow.className = 'drawer-actions-row';
+
+  const markReminderButton = document.createElement('button');
+  markReminderButton.type = 'button';
+  markReminderButton.className = 'btn';
+  markReminderButton.textContent = 'Mark Reminder Sent';
+  markReminderButton.addEventListener('click', () => {
+    onMarkReminderSent(renter.id);
+  });
+
+  reminderActionRow.appendChild(markReminderButton);
+
   methodField.append(methodLabel, dropdown.element);
-  logPanel.append(logTitle, amountField, noteField, methodField, otherMethodField);
+  logPanel.append(logTitle, amountField, noteField, methodField, otherMethodField, reminderActionRow);
 
   monthPanel.append(monthTitle, paymentList, remainingText, logPanel);
 
@@ -153,7 +213,13 @@ export function renderRenterDrawer({ drawerElement, overlayElement, renter, paym
 
     entries.forEach((entry) => {
       const line = document.createElement('div');
-      line.textContent = `${entry.date} • ${entry.type} • ${formatMoney(entry.amount)} • ${entry.note}`;
+
+      if (entry.type === 'Reminder marked sent') {
+        line.textContent = `${formatReminderDate(entry.date)} • Reminder marked sent`;
+      } else {
+        line.textContent = `${entry.date} • ${entry.type} • ${formatMoney(entry.amount)} • ${entry.note}`;
+      }
+
       list.appendChild(line);
     });
 
