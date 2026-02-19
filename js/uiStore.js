@@ -1,3 +1,14 @@
+const emptyBusinessProfile = {
+  businessName: '',
+  phone: '',
+  address1: '',
+  address2: '',
+  city: '',
+  state: '',
+  zip: '',
+  logoUrl: '',
+};
+
 const state = {
   selectedRenterId: null,
   searchText: '',

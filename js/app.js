@@ -394,6 +394,12 @@ function renderArchivePanel() {
 
 function openRenterDrawer(renter) {
   updateUiState({ selectedRenterId: renter.id });
+  await ensureChargeAndLedgerRefreshForRenter(renter);
+
+  const monthKey = getCurrentMonthKey();
+  const paymentsThisMonth = (ledgerByRenterId[renter.id] || [])
+    .filter((entry) => entry.type === 'payment' && entry.appliesToMonthKey === monthKey)
+    .map((entry) => ({ amount: Number(entry.amount || 0), method: entry.method || 'Recorded payment', note: entry.note || '', date: toSafeDate(entry.date || entry.createdAt).toISOString().slice(0, 10) }));
 
   renderRenterDrawer({
     drawerElement,
@@ -557,6 +563,89 @@ function startRenterListeners() {
     updateUiState({ archivedRenters: nextRenters, archiveLoading: false, archiveError: null });
     renderArchivePanel();
   });
+  renderSettingsPanel();
+}
+
+async function saveBusinessSettings() {
+  const uiState = getUiState();
+
+  if (!uiState.businessDraft.businessName.trim()) {
+    updateUiState({ settingsError: 'Business name is required.' });
+    renderSettingsPanel();
+    return;
+  }
+
+  updateUiState({ settingsSaving: true, settingsError: null, settingsSavedNotice: false });
+  renderSettingsPanel();
+
+  try {
+    const saved = await business.update(CURRENT_USER_UID, uiState.businessDraft);
+    updateUiState({
+      businessSaved: { ...saved },
+      businessDraft: { ...saved },
+      businessDirty: false,
+      settingsSaving: false,
+      settingsSavedNotice: true,
+    });
+    showToast('Settings saved.');
+  } catch (error) {
+    updateUiState({ settingsSaving: false, settingsError: `Unable to save settings: ${error.message}` });
+  }
+
+  renderSettingsPanel();
+}
+
+function cancelBusinessSettings() {
+  const uiState = getUiState();
+  updateUiState({ businessDraft: { ...uiState.businessSaved }, businessDirty: false, settingsError: null, settingsSavedNotice: false });
+  renderSettingsPanel();
+}
+
+async function handleLogoSelected(file) {
+  if (!file) {
+    return;
+  }
+
+  if (!ALLOWED_LOGO_TYPES.has(file.type)) {
+    updateUiState({ logoError: 'Only PNG, JPG, and WEBP files are allowed.' });
+    renderSettingsPanel();
+    return;
+  }
+
+  if (file.size > MAX_LOGO_BYTES) {
+    updateUiState({ logoError: 'Logo must be 3MB or smaller.' });
+    renderSettingsPanel();
+    return;
+  }
+
+  updateUiState({ logoUploading: true, logoProgress: 0, logoError: null, settingsSavedNotice: false });
+  renderSettingsPanel();
+
+  try {
+    const result = await branding.uploadLogo(CURRENT_USER_UID, file, (percent) => {
+      updateUiState({ logoProgress: percent });
+      renderSettingsPanel();
+    });
+
+    const updatedProfile = await business.get(CURRENT_USER_UID);
+    const mergedDraft = { ...updatedProfile, logoUrl: result.logoUrl || updatedProfile.logoUrl || '' };
+
+    updateUiState({
+      businessSaved: { ...mergedDraft },
+      businessDraft: { ...mergedDraft },
+      businessDirty: false,
+      logoUploading: false,
+      logoProgress: 100,
+      logoError: null,
+      settingsSavedNotice: true,
+    });
+
+    showToast('Logo uploaded.');
+  } catch (error) {
+    updateUiState({ logoUploading: false, logoError: `Upload failed: ${error.message}` });
+  }
+
+  renderSettingsPanel();
 }
 
 function openArchivePanel() {
@@ -575,6 +664,13 @@ function setupEvents() {
   overlayElement.addEventListener('click', () => closeDrawer(drawerElement, overlayElement));
   railArchiveButton.addEventListener('click', openArchivePanel);
   menuArchiveButton.addEventListener('click', openArchivePanel);
+
+  menuButton.addEventListener('click', () => menuPopover.classList.toggle('open'));
+
+  logoFileInput.addEventListener('change', (event) => {
+    const [file] = event.target.files || [];
+    handleLogoSelected(file);
+  });
 
   menuButton.addEventListener('click', () => menuPopover.classList.toggle('open'));
 

@@ -35,7 +35,8 @@ export function createRenterCard({
 
   const meta = document.createElement('div');
   meta.className = 'renter-meta';
-  meta.textContent = `Due day: ${renter.dueDayOfMonth} • Rent: $${renter.monthlyRent.toFixed(2)}`;
+  const statusText = renter.statusLabel ? ` • Status: ${renter.statusLabel}` : '';
+  meta.textContent = `Due day: ${renter.dueDayOfMonth} • Rent: $${renter.monthlyRent.toFixed(2)}${statusText}`;
 
   textWrap.append(name, meta);
   info.append(chip, textWrap);
